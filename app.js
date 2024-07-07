@@ -29,6 +29,7 @@ db.serialize(() => {
 // Route to generate certificate
 app.post('/generate', async (req, res) => {
     const { name } = req.body;
+    console.log("Name received:", name); // Add this line
     const id = Date.now().toString();
     const qrText = `${process.env.BASE_URL}/verify/${id}`; // Use BASE_URL from .env
 
@@ -46,6 +47,9 @@ app.post('/generate', async (req, res) => {
     doc.fontSize(20).text(`This is to certify that ${name} has successfully completed the course.`, {
         align: 'center'
     });
+    doc.fontSize(14).text(`This is only Example For Certificate`, {
+        align: 'center'
+    });
     doc.image(qrCodeDataUrl, {
         fit: [100, 100],
         align: 'center',
@@ -61,12 +65,119 @@ app.post('/generate', async (req, res) => {
                 res.status(500).send("Error saving certificate.");
                 return;
             }
-            res.download(filePath);
+            // Send the certificate URL
+
+            res.send(`
+           <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Certificate Generator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            margin-bottom: 5px;
+            font-weight: bold;
+            text-align: left;
+        }
+
+        input[type="text"] {
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        button {
+            padding: 10px;
+            background-color: #28a745;
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover {
+            background-color: #218838;
+        }
+
+        .footer {
+            margin-top: 20px;
+            font-size: 12px;
+            color: #777;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Certificated Generated</h1>
+    <p>Your certificate has been generated successfully.</p>
+    <p><a href="${process.env.BASE_URL}/download/${id}" download>Download Certificate</a></p>
+    <div class="footer">
+        <p>Verify your certificate <a href="${process.env.BASE_URL}/verify/${id}">click here</a> or scan QR</p>
+        <img src="${qrCodeDataUrl}" alt="QR Code">
+    </div>
+</div>
+</body>
+</html>
+            `);
         });
     });
 
     writeStream.on('error', (err) => {
         res.status(500).send("Error writing file.");
+    });
+});
+
+// Route to download certificate
+app.get('/download/:id', (req, res) => {
+    const { id } = req.params;
+
+    db.get("SELECT * FROM certificates WHERE id = ?", [id], (err, row) => {
+        if (err) {
+            res.status(500).send("Error downloading certificate.");
+            return;
+        }
+
+        if (!row) {
+            res.status(404).send("Certificate not found.");
+            return;
+        }
+
+        const filePath = path.join(__dirname, 'certificates', `${id}.pdf`);
+        res.download(filePath);
     });
 });
 
